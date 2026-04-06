@@ -1,8 +1,10 @@
 cmake_minimum_required(VERSION 3.8)
 project(simple_slam)
 
+set(NODE_NAME simple_slam_node)
+
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wextra -Wpedantic)
+  add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
 # find dependencies
@@ -15,7 +17,9 @@ find_package(tf2_ros REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 
-add_executable(simple_slam_node src/simple_slam_node.cpp)
+add_executable(${NODE_NAME} src/simple_slam_node.cpp src/simple_slam_main.cpp)
+
+target_include_directories(${NODE_NAME} PRIVATE include)
 
 ament_target_dependencies(simple_slam_node rclcpp sensor_msgs nav_msgs tf2 tf2_ros geometry_msgs std_msgs)
 

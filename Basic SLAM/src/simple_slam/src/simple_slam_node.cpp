@@ -1,34 +1,25 @@
-#include "rclcpp/rclcpp.hpp"
-#include "nav_msgs/msg/odometry.hpp"
-#include "sensor_msgs/msg/laser_scan.hpp"
-#include "geometry_msgs/msg/transform_stamped.hpp"
-#include "tf2_ros/transform_broadcaster.hpp"
-#include "nav_msgs/msg/occupancy_grid.hpp"
+#include "simple_slam_node.hpp"
 
-class SimpleSlamNode : public rclcpp::Node
-{
-public:
-   SimpleSlamNode() : Node("SimpleSlamNode")
+static constexpr double ONE = 1.0;
+static constexpr double TWO = 2.0;
+
+namespace SimpleSlamSpace {
+
+SimpleSlamNode::SimpleSlamNode()
+   : rclcpp::Node("SimpleSlamNode")
+   , m_robotData({0.0, 0.0, 0.0})
    {
       m_gridOccupancyMap = std::make_shared<nav_msgs::msg::OccupancyGrid>();
       m_subscription = create_subscription<sensor_msgs::msg::LaserScan>("/scan", 20
       , std::bind(&SimpleSlamNode::OnScannedDataReceived, this, std::placeholders::_1));
+
+      m_odomSubscriber = create_subscription<nav_msgs::msg::Odometry>("/odom", 20,
+      std::bind(&SimpleSlamNode::OnOdometricDataReceived, this, std::placeholders::_1));
  
       InitializeMapData();
 
       m_publisher = create_publisher<nav_msgs::msg::OccupancyGrid>("/map", 20);
-   }
-
-private:
-   void OnScannedDataReceived(sensor_msgs::msg::LaserScan::SharedPtr scanData);
-   void InitializeMapData();
-   void update_map(double x, double y);
-
-private:
-  rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr m_publisher;
-  rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr m_subscription;
-  nav_msgs::msg::OccupancyGrid::SharedPtr m_gridOccupancyMap;
-};
+}
 
 void SimpleSlamNode::InitializeMapData()
 {
@@ -36,8 +27,8 @@ void SimpleSlamNode::InitializeMapData()
    m_gridOccupancyMap->info.resolution        = 0.05;
    m_gridOccupancyMap->info.width             = width;
    m_gridOccupancyMap->info.height            = width;
-   m_gridOccupancyMap->info.origin.position.x = -10;
-   m_gridOccupancyMap->info.origin.position.y = -10;
+   m_gridOccupancyMap->info.origin.position.x = -20;
+   m_gridOccupancyMap->info.origin.position.y = -20;
 
    m_gridOccupancyMap->data.resize(width * width, -1);
 }
@@ -47,17 +38,20 @@ void SimpleSlamNode::OnScannedDataReceived(sensor_msgs::msg::LaserScan::SharedPt
    double angle = scanData->angle_min;
 
    for (size_t i = 0; i < scanData->ranges.size(); i++) {
-            double r = scanData->ranges[i];
+            double range = scanData->ranges[i];
 
-            if (std::isinf(r) || std::isnan(r)) {
+            if (std::isinf(range) || std::isnan(range)) {
                 angle += scanData->angle_increment;
                 continue;
             }
 
-            double x = r * cos(angle);
-            double y = r * sin(angle);
+            double localX = range * cos(angle);
+            double localY = range * sin(angle);
 
-            update_map(x, y);
+            double globalX = m_robotData.xCoord + (localX * std::cos(m_robotData.yaw) - localY * std::sin(m_robotData.yaw));
+            double globalY = m_robotData.yCoord + (localX * std::sin(m_robotData.yaw) + localY * std::cos(m_robotData.yaw));
+
+            UpdateMap(globalX, globalY);
 
             angle += scanData->angle_increment;
         }
@@ -68,7 +62,7 @@ void SimpleSlamNode::OnScannedDataReceived(sensor_msgs::msg::LaserScan::SharedPt
         m_publisher->publish(*m_gridOccupancyMap); 
 }
 
-void SimpleSlamNode::update_map(double x, double y) {
+void SimpleSlamNode::UpdateMap(double x, double y) {
 
         int mx = (x - m_gridOccupancyMap->info.origin.position.x) / m_gridOccupancyMap->info.resolution;
         int my = (y - m_gridOccupancyMap->info.origin.position.y) / m_gridOccupancyMap->info.resolution;
@@ -80,20 +74,27 @@ void SimpleSlamNode::update_map(double x, double y) {
 
         int index = my * m_gridOccupancyMap->info.width + mx;
 
-        if (index < 0 || index >= m_gridOccupancyMap->data.size())
+        if (index < 0 || index >= static_cast <int>(m_gridOccupancyMap->data.size()))
         {
           return;
         }
 
-        m_gridOccupancyMap->data[index] = 100;  // occupied
+        m_gridOccupancyMap->data[index] = 100;
 }
 
-int main(int argc, char* argv[])
+
+void SimpleSlamNode::OnOdometricDataReceived(nav_msgs::msg::Odometry::SharedPtr odomData)
 {
+  m_robotData.xCoord = odomData->pose.pose.position.x;
+  m_robotData.yCoord = odomData->pose.pose.position.y;
 
-   rclcpp::init(argc, argv);
-   rclcpp::spin(std::make_shared<SimpleSlamNode>());
-   rclcpp::shutdown();
+  double sinYcosP = TWO * (odomData->pose.pose.orientation.w * odomData->pose.pose.orientation.z +
+                          odomData->pose.pose.orientation.x * odomData->pose.pose.orientation.y);
+  double cosYcosP = ONE - TWO * (odomData->pose.pose.orientation.y * odomData->pose.pose.orientation.y +
+                                odomData->pose.pose.orientation.z * odomData->pose.pose.orientation.z);
 
-   return EXIT_SUCCESS;
+  m_robotData.yaw = std::atan2(sinYcosP, cosYcosP);
 }
+
+}
+
