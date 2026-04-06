@@ -5,7 +5,7 @@
 <img width="1145" height="512" alt="image" src="https://github.com/user-attachments/assets/c1b2091e-b996-4165-8901-72cb0e85b018" />
 Basic turtlebot3 in Gazebo.
 
-<img width="957" height="541" alt="image" src="https://github.com/user-attachments/assets/3ce9ff9f-4ce0-44dd-bc87-4fc3104b5c3c" />
+<img width="957" height="541" alt="image" src="https://github.com/user-attachments/assets/3ce9ff9f-4ce0-44dd-bc87-4fc3104b5c3c" /><br>
 Map created with LiDaR data in rviz.
 
 
