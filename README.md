@@ -1,6 +1,6 @@
 # ROS2_Projects
 ## Contents:
-### 1.) Basic SLAM: Subscription to `/scan` and `/odom` data from any robot (tested with basic turtlebot3 burger), and creating a simple map from LiDaR co-ordinate to real world co-ordinate, this map can be observed in rviz.
+### 1.) Basic SLAM: Odometry and LiDAR data from a robot (tested with basic turtlebot3 burger) translated into a simple map. This map can be observed in rviz.
 
 <img width="1145" height="512" alt="image" src="https://github.com/user-attachments/assets/c1b2091e-b996-4165-8901-72cb0e85b018" />
 Basic turtlebot3 in Gazebo.
