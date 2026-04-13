@@ -26,9 +26,8 @@
 class PointCloud : public rclcpp::Node
 {
 public:
-    PointCloud()) : Node("PointCloudProcessing")
+    PointCloud() : Node("PointCloud")
     {
-        // QoS for sensor data (IMPORTANT in Jazzy)
         m_subscription = this->create_subscription<sensor_msgs::msg::PointCloud2>(
             "/camera/depth_image/points",
             rclcpp::SensorDataQoS(),
@@ -36,7 +35,7 @@ public:
         );
 
         m_tfBuffer = std::make_shared<tf2_ros::Buffer>(get_clock());
-        m_tfListener = std::make_shared<tf2_ros::TransformListener>(*m_tfBuffer);
+        m_tfListener = std::make_shared<tf2_ros::TransformListener>(*m_tfBuffer, this, false);
     }
 
 private:
