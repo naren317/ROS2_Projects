@@ -23,16 +23,16 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 
-class PointCloudProcessor : public rclcpp::Node
+class PointCloud : public rclcpp::Node
 {
 public:
-    PointCloudProcessor() : Node("PointCloudProcessing")
+    PointCloud()) : Node("PointCloudProcessing")
     {
         // QoS for sensor data (IMPORTANT in Jazzy)
         m_subscription = this->create_subscription<sensor_msgs::msg::PointCloud2>(
             "/camera/depth_image/points",
             rclcpp::SensorDataQoS(),
-            std::bind(&PointCloudProcessor::onPointCloudReceived, this, std::placeholders::_1)
+            std::bind(&PointCloud::onPointCloudReceived, this, std::placeholders::_1)
         );
 
         m_tfBuffer = std::make_shared<tf2_ros::Buffer>(get_clock());
@@ -149,7 +149,7 @@ private:
 int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<PointCloudProcessor>());
+    rclcpp::spin(std::make_shared<PointCloud>());
     rclcpp::shutdown();
     return 0;
 }
