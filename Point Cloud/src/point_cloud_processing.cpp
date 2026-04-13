@@ -62,7 +62,7 @@ private:
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZ>);
         vg.filter(*cloud_filtered);
 
-        // Step 2: Remove ground (RANSAC)
+        // RANSAC and Remove ground
         pcl::SACSegmentation<pcl::PointXYZ> seg;
         pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
         pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
@@ -89,7 +89,7 @@ private:
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_objects(new pcl::PointCloud<pcl::PointXYZ>);
         extract.filter(*cloud_objects);
 
-        // Step 3: Clustering
+        // Clustering
         pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
         tree->setInputCloud(cloud_objects);
 
