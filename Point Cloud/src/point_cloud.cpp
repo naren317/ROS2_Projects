@@ -34,8 +34,10 @@ public:
             std::bind(&PointCloud::onPointCloudReceived, this, std::placeholders::_1)
         );
 
+
         m_tfBuffer = std::make_shared<tf2_ros::Buffer>(get_clock());
         m_tfListener = std::make_shared<tf2_ros::TransformListener>(*m_tfBuffer, this, false);
+        m_cloud = new pcl::PointCloud <pcl::PointXYZ>;
     }
 
 private:
@@ -43,34 +45,43 @@ private:
 
     std::shared_ptr<tf2_ros::Buffer> m_tfBuffer;
     std::shared_ptr<tf2_ros::TransformListener> m_tfListener;
+    pcl::PointCloud<pcl::PointXYZ>::Ptr m_cloud;
 
+private:
     void onPointCloudReceived(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
     {
-        // Convert ROS message to point cloud.
-        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
-        pcl::fromROSMsg(*msg, *cloud);
-
-        if (cloud->empty())
-            return;
-
-        // Downsample, voxel filtering.
         pcl::VoxelGrid<pcl::PointXYZ> vg;
-        vg.setInputCloud(cloud);
-        vg.setLeafSize(0.05f, 0.05f, 0.05f);
-
-        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZ>);
-        vg.filter(*cloud_filtered);
-
-        // RANSAC and Remove ground
         pcl::SACSegmentation<pcl::PointXYZ> seg;
         pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
         pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
+        pcl::ExtractIndices<pcl::PointXYZ> extract;
+        pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
+        geometry_msgs::msg::PointStamped pointStamped, pt_world;
+        std::vector<pcl::PointIndices> cluster_indices;
+        pcl::EuclideanClusterExtraction<pcl::PointXYZ> euClustExtract;
 
+        // Convert ROS message to point cloud.
+        pcl::fromROSMsg(*msg, *m_cloud);
+
+        if (m_cloud->empty())
+        {
+            return;
+        }
+
+        // Downsample, voxel filtering.
+        vg.setInputCloud(m_cloud);
+        vg.setLeafSize(0.05f, 0.05f, 0.05f);
+
+        m_cloud->clear();
+
+        vg.filter(*m_cloud);
+
+        // RANSAC and Remove ground
         seg.setOptimizeCoefficients(true);
         seg.setModelType(pcl::SACMODEL_PLANE);
         seg.setMethodType(pcl::SAC_RANSAC);
-        seg.setDistanceThreshold(0.02);
-        seg.setInputCloud(cloud_filtered);
+        seg.setDistanceThreshold(0.05);
+        seg.setInputCloud(m_cloud);
         seg.segment(*inliers, *coefficients);
 
         if (inliers->indices.empty())
@@ -80,27 +91,23 @@ private:
         }
 
         // Extract objects (remove plane)
-        pcl::ExtractIndices<pcl::PointXYZ> extract;
-        extract.setInputCloud(cloud_filtered);
+        extract.setInputCloud(m_cloud);
         extract.setIndices(inliers);
         extract.setNegative(true);
 
-        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_objects(new pcl::PointCloud<pcl::PointXYZ>);
-        extract.filter(*cloud_objects);
+        m_cloud->clear();
+
+        extract.filter(*m_cloud);
 
         // Clustering
-        pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
-        tree->setInputCloud(cloud_objects);
+        tree->setInputCloud(m_cloud);
 
-        std::vector<pcl::PointIndices> cluster_indices;
-
-        pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
-        ec.setClusterTolerance(0.1);
-        ec.setMinClusterSize(50);
-        ec.setMaxClusterSize(25000);
-        ec.setSearchMethod(tree);
-        ec.setInputCloud(cloud_objects);
-        ec.extract(cluster_indices);
+        euClustExtract.setClusterTolerance(0.1);
+        euClustExtract.setMinClusterSize(50);
+        euClustExtract.setMaxClusterSize(25000);
+        euClustExtract.setSearchMethod(tree);
+        euClustExtract.setInputCloud(m_cloud);
+        euClustExtract.extract(cluster_indices);
 
         int cluster_id = 0;
 
@@ -110,9 +117,9 @@ private:
 
             for (int idx : indices.indices)
             {
-                cx += cloud_objects->points[idx].x;
-                cy += cloud_objects->points[idx].y;
-                cz += cloud_objects->points[idx].z;
+                cx += m_cloud->points[idx].x;
+                cy += m_cloud->points[idx].y;
+                cz += m_cloud->points[idx].z;
             }
 
             int size = indices.indices.size();
@@ -120,26 +127,27 @@ private:
             cy /= size;
             cz /= size;
 
-            // Step 4: Transform to world frame
-            geometry_msgs::msg::PointStamped pt, pt_world;
+            // Transforming to world frame
 
-            pt.header = msg->header;
-            pt.point.x = cx;
-            pt.point.y = cy;
-            pt.point.z = cz;
+            pointStamped.header = msg->header;
+            pointStamped.point.x = cx;
+            pointStamped.point.y = cy;
+            pointStamped.point.z = cz;
 
-            try {
-                pt_world = m_tfBuffer->transform(pt, "world");
+            try
+            {
+                pt_world = m_tfBuffer->transform(pointStamped, "world");
 
-                RCLCPP_INFO(this->get_logger(),
-                    "Cluster %d WORLD (%.2f, %.2f, %.2f)",
-                    cluster_id++,
-                    pt_world.point.x,
-                    pt_world.point.y,
-                    pt_world.point.z);
+            }
 
-            } catch (tf2::TransformException &ex) {
+            catch (tf2::TransformException &ex)
+            {
                 RCLCPP_WARN(this->get_logger(), "TF failed: %s", ex.what());
+            }
+
+            catch (const std::exception& ex)
+            {
+                RCLCPP_WARN(get_logger(), "Unknow exception occurred: %s", ex.what());
             }
         }
     }
