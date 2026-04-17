@@ -90,8 +90,8 @@ void SimpleSlamNode::OnOdometricDataReceived(nav_msgs::msg::Odometry::SharedPtr 
 
   double sinYcosP = TWO * (odomData->pose.pose.orientation.w * odomData->pose.pose.orientation.z +
                           odomData->pose.pose.orientation.x * odomData->pose.pose.orientation.y);
-  double cosYcosP = ONE - TWO * (odomData->pose.pose.orientation.y * odomData->pose.pose.orientation.y +
-                                odomData->pose.pose.orientation.z * odomData->pose.pose.orientation.z);
+  double cosYcosP = ONE - TWO * (std::pow(odomData->pose.pose.orientation.y, TWO) +
+                                std::pow(odomData->pose.pose.orientation.z, TWO));
 
   m_robotData.yaw = std::atan2(sinYcosP, cosYcosP);
 }
