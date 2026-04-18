@@ -26,7 +26,12 @@
 class PointCloud : public rclcpp::Node
 {
 public:
-    PointCloud() : Node("PointCloud")
+    PointCloud()
+    : Node("PointCloud")
+    , m_cloud (new pcl::PointCloud <pcl::PointXYZ>)
+    , m_inliers (new pcl::PointIndices)
+    , m_coefficients (new pcl::ModelCoefficients)
+    , m_kdTree (new pcl::search::KdTree <pcl::PointXYZ>)
     {
         m_subscription = this->create_subscription<sensor_msgs::msg::PointCloud2>(
             "/camera/depth_image/points",
@@ -37,7 +42,6 @@ public:
 
         m_tfBuffer = std::make_shared<tf2_ros::Buffer>(get_clock());
         m_tfListener = std::make_shared<tf2_ros::TransformListener>(*m_tfBuffer, this, false);
-        m_cloud = new pcl::PointCloud <pcl::PointXYZ>;
     }
 
 private:
@@ -46,16 +50,16 @@ private:
     std::shared_ptr<tf2_ros::Buffer> m_tfBuffer;
     std::shared_ptr<tf2_ros::TransformListener> m_tfListener;
     pcl::PointCloud<pcl::PointXYZ>::Ptr m_cloud;
+    pcl::PointIndices::Ptr m_inliers;
+    pcl::ModelCoefficients::Ptr m_coefficients;
+    pcl::search::KdTree <pcl::PointXYZ>::Ptr m_kdTree;
 
 private:
     void onPointCloudReceived(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
     {
         pcl::VoxelGrid<pcl::PointXYZ> vg;
         pcl::SACSegmentation<pcl::PointXYZ> seg;
-        pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
-        pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
         pcl::ExtractIndices<pcl::PointXYZ> extract;
-        pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
         geometry_msgs::msg::PointStamped pointStamped, pt_world;
         std::vector<pcl::PointIndices> cluster_indices;
         pcl::EuclideanClusterExtraction<pcl::PointXYZ> euClustExtract;
@@ -73,6 +77,8 @@ private:
         vg.setLeafSize(0.05f, 0.05f, 0.05f);
 
         m_cloud->clear();
+        m_inliers->indices.clear();
+        m_coefficients->values.clear();
 
         vg.filter(*m_cloud);
 
@@ -82,9 +88,9 @@ private:
         seg.setMethodType(pcl::SAC_RANSAC);
         seg.setDistanceThreshold(0.05);
         seg.setInputCloud(m_cloud);
-        seg.segment(*inliers, *coefficients);
+        seg.segment(*m_inliers, *m_coefficients);
 
-        if (inliers->indices.empty())
+        if (m_inliers->indices.empty())
         {
             RCLCPP_WARN(this->get_logger(), "No plane found");
             return;
@@ -92,7 +98,7 @@ private:
 
         // Extract objects (remove plane)
         extract.setInputCloud(m_cloud);
-        extract.setIndices(inliers);
+        extract.setIndices(m_inliers);
         extract.setNegative(true);
 
         m_cloud->clear();
@@ -100,18 +106,16 @@ private:
         extract.filter(*m_cloud);
 
         // Clustering
-        tree->setInputCloud(m_cloud);
+        m_kdTree->setInputCloud(m_cloud);
 
         euClustExtract.setClusterTolerance(0.1);
         euClustExtract.setMinClusterSize(50);
         euClustExtract.setMaxClusterSize(25000);
-        euClustExtract.setSearchMethod(tree);
+        euClustExtract.setSearchMethod(m_kdTree);
         euClustExtract.setInputCloud(m_cloud);
         euClustExtract.extract(cluster_indices);
 
-        int cluster_id = 0;
-
-        for (const auto& indices : cluster_indices)
+        for (auto& indices : cluster_indices)
         {
             float cx = 0, cy = 0, cz = 0;
 
