@@ -33,12 +33,13 @@ public:
     , m_coefficients (new pcl::ModelCoefficients)
     , m_kdTree (new pcl::search::KdTree <pcl::PointXYZ>)
     {
-        m_subscription = this->create_subscription<sensor_msgs::msg::PointCloud2>(
+        m_subscription = create_subscription<sensor_msgs::msg::PointCloud2>(
             "/camera/depth_image/points",
             rclcpp::SensorDataQoS(),
             std::bind(&PointCloud::onPointCloudReceived, this, std::placeholders::_1)
         );
 
+        m_publisher = create_publisher <sensor_msgs::msg::PointCloud2> ("/processed_points", rclcpp::SensorDataQoS());
 
         m_tfBuffer = std::make_shared<tf2_ros::Buffer>(get_clock());
         m_tfListener = std::make_shared<tf2_ros::TransformListener>(*m_tfBuffer, this, false);
@@ -46,6 +47,7 @@ public:
 
 private:
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr m_subscription;
+    rclcpp::Publisher <sensor_msgs::msg::PointCloud2>::SharedPtr m_publisher;
 
     std::shared_ptr<tf2_ros::Buffer> m_tfBuffer;
     std::shared_ptr<tf2_ros::TransformListener> m_tfListener;
@@ -141,7 +143,6 @@ private:
             try
             {
                 pt_world = m_tfBuffer->transform(pointStamped, "world");
-
             }
 
             catch (tf2::TransformException &ex)
@@ -154,6 +155,13 @@ private:
                 RCLCPP_WARN(get_logger(), "Unknow exception occurred: %s", ex.what());
             }
         }
+
+        sensor_msgs::msg::PointCloud2 outputCloud;
+
+        pcl::toROSMsg(*m_cloud, outputCloud);
+
+        outputCloud.header = msg->header;
+        m_publisher->publish(outputCloud);
     }
 };
 
