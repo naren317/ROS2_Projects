@@ -94,7 +94,7 @@ private:
 
         if (m_inliers->indices.empty())
         {
-            RCLCPP_WARN(this->get_logger(), "No plane found");
+            RCLCPP_WARN(get_logger(), "No plane found");
             return;
         }
 
@@ -117,6 +117,8 @@ private:
         euClustExtract.setInputCloud(m_cloud);
         euClustExtract.extract(cluster_indices);
 
+        pcl::PointCloud <pcl::PointXYZ> processedCloud;
+
         for (auto& indices : cluster_indices)
         {
             float cx = 0, cy = 0, cz = 0;
@@ -133,8 +135,6 @@ private:
             cy /= size;
             cz /= size;
 
-            // Transforming to world frame
-
             pointStamped.header = msg->header;
             pointStamped.point.x = cx;
             pointStamped.point.y = cy;
@@ -142,25 +142,30 @@ private:
 
             try
             {
-                pt_world = m_tfBuffer->transform(pointStamped, "world");
+                // Transforming to world frame
+                pt_world = m_tfBuffer->transform(pointStamped, "map");
+
+                processedCloud.points.emplace_back(pt_world.point.x, pt_world.point.y, pt_world.point.z);
             }
 
             catch (tf2::TransformException &ex)
             {
-                RCLCPP_WARN(this->get_logger(), "TF failed: %s", ex.what());
+                RCLCPP_WARN(get_logger(), "TF failed: %s", ex.what());
             }
 
             catch (const std::exception& ex)
             {
-                RCLCPP_WARN(get_logger(), "Unknow exception occurred: %s", ex.what());
+                RCLCPP_WARN(get_logger(), "Unknown exception occurred: %s", ex.what());
             }
         }
 
         sensor_msgs::msg::PointCloud2 outputCloud;
 
-        pcl::toROSMsg(*m_cloud, outputCloud);
+        pcl::toROSMsg(processedCloud, outputCloud);
 
-        outputCloud.header = msg->header;
+        outputCloud.header.frame_id = msg->header.frame_id;
+        outputCloud.header.stamp = msg->header.stamp;
+        
         m_publisher->publish(outputCloud);
     }
 };
@@ -170,5 +175,6 @@ int main(int argc, char **argv)
     rclcpp::init(argc, argv);
     rclcpp::spin(std::make_shared<PointCloud>());
     rclcpp::shutdown();
-    return 0;
+
+    return EXIT_SUCCESS;
 }
