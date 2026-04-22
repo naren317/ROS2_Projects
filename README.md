@@ -8,7 +8,8 @@ Basic turtlebot3 in Gazebo.
 <img width="957" height="541" alt="image" src="https://github.com/user-attachments/assets/3ce9ff9f-4ce0-44dd-bc87-4fc3104b5c3c" /><br>
 Map created with LiDAR data for a basic 2D SLAM using occupancy grid, visualization in rviz.
 
+### 2.) Simple Pointcloud processing: A simple demo of point cloud processing, where in a point cloud is obtained by a gazebo simulated `depth_camera` and processed via a simple subscribing node using `pcl::PoinCloud`.
 
-### 2.) Simple Interface: Interface created with custom data for publishing a timepoint and conversion to a localtime by the subscriber.
+### 3.) Simple Interface: Interface created with custom data for publishing a timepoint and conversion to a localtime by the subscriber.
 
 
