@@ -14,10 +14,10 @@ public:
          , std::bind(&DataSubscriber::OnDataReceived, this, std::placeholders::_1));
       }
 
-     void OnDataReceived(const custom_interface::msg::RobotData& data);
+     void OnDataReceived(custom_interface::msg::RobotData::SharedPtr data);
 };
 
-void DataSubscriber::OnDataReceived(const custom_interface::msg::RobotData& data)
+void DataSubscriber::OnDataReceived(custom_interface::msg::RobotData::SharedPtr data)
 {
    std::tm* tm = std::localtime(&data->last_updated);
    std::string timeStamp = std::format("Hour: {}, Min: {}, Sec: {}", tm->tm_hour, tm->tm_min, tm->tm_sec);
