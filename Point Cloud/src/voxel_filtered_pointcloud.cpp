@@ -8,7 +8,7 @@
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/passthrough.h>
 
-static constexpr size_t QOS_QUEUE;
+static constexpr size_t QOS_QUEUE = 10;
 class CloudFilter : public rclcpp::Node
 {
 public:
